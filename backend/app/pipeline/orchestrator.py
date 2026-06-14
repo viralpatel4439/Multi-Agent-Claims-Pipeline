@@ -25,6 +25,27 @@ def run_full_pipeline(self, claim_id: str, claim_data: dict):
     """
     Monolithic pipeline task — runs all agents sequentially with graceful failure handling.
     """
+    import redis as sync_redis
+
+    # Redis NX lock — prevents two workers from running the pipeline for the same claim.
+    # TTL is 10 minutes; the lock is released in the finally block on normal completion.
+    _redis = sync_redis.from_url(
+        __import__("os").environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        decode_responses=True,
+    )
+    lock_key = f"pipeline_lock:{claim_id}"
+    acquired = _redis.set(lock_key, "1", nx=True, ex=600)
+    if not acquired:
+        return {"skipped": True, "reason": f"Pipeline already running for claim {claim_id}"}
+
+    try:
+        return _run_pipeline(claim_id, claim_data)
+    finally:
+        _redis.delete(lock_key)
+
+
+def _run_pipeline(claim_id: str, claim_data: dict):
+    """Inner pipeline — called only after the NX lock is acquired."""
     def run_async(coro):
         try:
             loop = asyncio.get_event_loop()
@@ -142,7 +163,9 @@ async def _persist(claim_id: str, data: dict):
                 failed = data.get("failed_components", [])
                 claim.pipeline_errors = {"failed_components": failed} if failed else None
                 await session.commit()
-        await redis_service.set_claim_status(claim_id, "COMPLETED", data.get("decision"))
+        # Delete the Redis key so the next poll reads full data from DB.
+        # Redis only holds in-flight states (PENDING / PROCESSING).
+        await redis_service.delete_claim_status(claim_id)
     except Exception:
         pass
 
@@ -160,6 +183,6 @@ async def _fail(claim_id: str, error: str):
                 claim.status = "FAILED"
                 claim.pipeline_errors = {"error": error}
                 await session.commit()
-        await redis_service.set_claim_status(claim_id, "FAILED")
+        await redis_service.delete_claim_status(claim_id)
     except Exception:
         pass

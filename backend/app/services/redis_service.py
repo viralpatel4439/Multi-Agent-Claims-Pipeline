@@ -36,6 +36,11 @@ async def set_claim_status(claim_id: str, status: str, decision: Optional[str] =
     await client.setex(f"claim_status:{claim_id}", 86400, json.dumps(payload))
 
 
+async def delete_claim_status(claim_id: str) -> None:
+    client = get_redis_client()
+    await client.delete(f"claim_status:{claim_id}")
+
+
 async def get_member_cache(member_id: str) -> Optional[dict]:
     client = get_redis_client()
     val = await client.get(f"member:{member_id}")

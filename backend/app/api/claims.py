@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -67,6 +68,30 @@ async def submit_claim(
             },
         )
 
+    # Idempotency guard — return the existing claim if same details are already in flight or done.
+    # Checks member_id + treatment_date + claim_category + claimed_amount against PENDING,
+    # PROCESSING, and COMPLETED claims. FAILED claims are excluded so the member can resubmit.
+    dup_result = await db.execute(
+        select(Claim)
+        .where(
+            Claim.member_id == request.member_id,
+            Claim.treatment_date == request.treatment_date,
+            Claim.claim_category == request.claim_category,
+            Claim.claimed_amount == Decimal(str(request.claimed_amount)),
+            Claim.status.in_(["PENDING", "PROCESSING", "COMPLETED"]),
+        )
+        .order_by(desc(Claim.created_at))
+        .limit(1)
+    )
+    existing = dup_result.scalar_one_or_none()
+    if existing:
+        return {
+            "claim_id": str(existing.id),
+            "status": existing.status,
+            "duplicate": True,
+            "message": "An identical claim is already being processed. Use the claim_id to track its status.",
+        }
+
     # Persist claim as PENDING
     claim = Claim(
         id=uuid.uuid4(),
@@ -100,15 +125,17 @@ async def get_claim(
     claim_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    # Fast Redis path for in-progress claims
+    # Redis holds the key only while the claim is in flight (PENDING / PROCESSING).
+    # The pipeline deletes the key on completion, so a Redis hit always means "still running".
     status_data = await redis_service.get_claim_status(claim_id)
-    if status_data and status_data.get("status") in ("PENDING", "PROCESSING"):
+    if status_data:
         return {
             "claim_id": claim_id,
             "status": status_data["status"],
             "decision": None,
         }
 
+    # No Redis key — claim is done (or never existed). Read full data from DB.
     try:
         claim_uuid = uuid.UUID(claim_id)
     except ValueError:
