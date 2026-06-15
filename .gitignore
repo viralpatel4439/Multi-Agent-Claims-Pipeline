@@ -38,7 +38,7 @@ pyrightconfig.json
 
 # ── ML model cache (sentence-transformers / HuggingFace) ─────────────────────
 .cache/
-models/
+/models/
 *.bin
 *.safetensors
 *.ot
