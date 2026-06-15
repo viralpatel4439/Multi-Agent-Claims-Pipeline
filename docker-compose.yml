@@ -46,6 +46,7 @@ services:
       - POLICY_FILE_PATH=/app/policy_terms.json
     volumes:
       - ./policy_terms.json:/app/policy_terms.json:ro
+      - ./test_cases.json:/app/test_cases.json:ro
       - uploads:/app/uploads
     ports:
       - "8000:8000"

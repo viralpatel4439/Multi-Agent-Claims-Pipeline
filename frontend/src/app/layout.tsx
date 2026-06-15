@@ -30,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="flex gap-6 items-center">
                   <a href="/" className="text-sm text-gray-600 hover:text-gray-900 font-medium">Submit Claim</a>
                   <a href="/claims" className="text-sm text-gray-600 hover:text-gray-900 font-medium">Claims</a>
+                  <a href="/tests" className="text-sm text-gray-600 hover:text-gray-900 font-medium">Test Suite</a>
                   <a href={`${BACKEND_BASE}/api/health`} target="_blank" rel="noreferrer" className="text-sm text-gray-400 hover:text-gray-700">Health ↗</a>
                   <a href={`${BACKEND_BASE}/docs`} target="_blank" rel="noreferrer" className="text-sm text-gray-400 hover:text-gray-700">API Docs ↗</a>
                 </div>

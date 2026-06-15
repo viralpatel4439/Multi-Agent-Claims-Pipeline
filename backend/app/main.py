@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import claims, members, health, upload, debug
+from app.api import claims, members, health, upload, debug, tests_runner
 from app.services import embedding_service, redis_service
 from app.services.policy_service import load_policy
 from app.config import get_settings
@@ -51,6 +51,7 @@ app.include_router(members.router, prefix="/api", tags=["Members"])
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(upload.router, prefix="/api", tags=["Upload"])
 app.include_router(debug.router, prefix="/api", tags=["Debug"])
+app.include_router(tests_runner.router, prefix="/api", tags=["Tests"])
 
 
 @app.get("/")

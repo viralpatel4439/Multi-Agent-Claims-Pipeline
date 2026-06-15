@@ -39,6 +39,35 @@ export async function rerunClaim(claimId: string) {
   return res.data
 }
 
+export async function runTests(): Promise<{
+  total: number
+  passed: number
+  failed: number
+  errored: number
+  duration_ms: number
+  results: Array<{
+    case_id: string
+    description: string
+    status: "PASSED" | "FAILED" | "ERROR"
+    failure_reason: string | null
+    expected_decision: string | null
+    actual_decision: string | null
+    expected_amount: number | null
+    actual_amount: number | null
+    actual_confidence: number | null
+    rejection_reasons: string[]
+    failed_components: string[]
+    waiting_period_eligible_from: string | null
+    issues: Array<{ issue_type: string; message: string }>
+    decision_reason: string | null
+    duration_ms: number
+  }>
+  error?: string
+}> {
+  const res = await api.get("/tests/run")
+  return res.data
+}
+
 /**
  * Open a Server-Sent Events connection for a claim.
  * The backend sends the current status immediately, then the final result
