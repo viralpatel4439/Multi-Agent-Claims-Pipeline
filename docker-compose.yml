@@ -19,9 +19,18 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    # AOF persistence: every write is fsynced — survives restarts without data loss.
+    # allkeys-lru eviction only applies once maxmemory is hit (cache keys).
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
     ports:
       - "6379:6379"
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -51,7 +60,13 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A app.pipeline.celery_app.celery_app worker --loglevel=info --concurrency=4
+    # Scale horizontally: docker compose up --scale celery_worker=3
+    # Each replica runs CELERY_WORKER_CONCURRENCY tasks concurrently.
+    command: >
+      celery -A app.pipeline.celery_app.celery_app worker
+      --loglevel=info
+      --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
+      --queues=pipeline
     env_file: .env
     environment:
       - POLICY_FILE_PATH=/app/policy_terms.json
@@ -92,4 +107,5 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
   uploads:

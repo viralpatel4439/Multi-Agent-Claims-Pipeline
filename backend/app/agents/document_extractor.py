@@ -91,8 +91,9 @@ class DocumentExtractionAgent:
 
             extracted = await self._extract(document)
 
-            if extracted.diagnosis:
-                extracted.diagnosis_embedding = embedding_service.embed_text(extracted.diagnosis)
+            embed_source = extracted.diagnosis or extracted.treatment
+            if embed_source:
+                extracted.diagnosis_embedding = embedding_service.embed_text(embed_source)
 
             return AgentResult(
                 success=True,
@@ -177,28 +178,45 @@ class DocumentExtractionAgent:
                 import logging
                 logging.getLogger(__name__).error("[Ollama batch] %s", e)
 
-        # Build AgentResult per document
-        results: list[AgentResult] = []
-        vision_cursor = 0
+        # Build all extracted docs first, then batch-embed in one model call
         elapsed = timer.elapsed_ms()
+        vision_cursor = 0
+        extracted_items: list[tuple[DocumentInput, Optional[ExtractedDocument], Optional[Exception]]] = []
 
         for i, doc in enumerate(documents):
             try:
                 if doc.file_path and i in vision_indices:
                     parsed = batch_parsed[vision_cursor]
                     vision_cursor += 1
-                    if parsed:
-                        extracted = self._build_extracted(doc.actual_type, parsed)
-                    else:
-                        extracted = self._extract_passthrough(doc)
+                    extracted = self._build_extracted(doc.actual_type, parsed) if parsed else self._extract_passthrough(doc)
                 elif doc.content:
                     extracted = self._extract_from_dict(doc)
                 else:
                     extracted = self._extract_passthrough(doc)
+                extracted_items.append((doc, extracted, None))
+            except Exception as e:
+                import logging as _log
+                _log.getLogger(__name__).error(
+                    "[run_batch] doc %s (file_id=%s) failed: %s",
+                    i, doc.file_id, e, exc_info=True,
+                )
+                extracted_items.append((doc, None, e))
 
-                if extracted.diagnosis:
-                    extracted.diagnosis_embedding = embedding_service.embed_text(extracted.diagnosis)
+        # Batch embed: use diagnosis if present, fall back to treatment
+        embed_texts = [
+            (extracted.diagnosis or extracted.treatment or "")
+            for _, extracted, _ in extracted_items
+            if extracted is not None
+        ]
+        embeddings = embedding_service.embed_batch(embed_texts)
 
+        embed_iter = iter(embeddings)
+        results: list[AgentResult] = []
+        for doc, extracted, err in extracted_items:
+            if extracted is not None:
+                emb = next(embed_iter)
+                if emb:
+                    extracted.diagnosis_embedding = emb
                 results.append(AgentResult(
                     success=True,
                     data=extracted.model_dump(),
@@ -206,16 +224,11 @@ class DocumentExtractionAgent:
                     agent_name=self.NAME,
                     processing_time_ms=elapsed,
                 ))
-            except Exception as e:
-                import logging as _log
-                _log.getLogger(__name__).error(
-                    "[run_batch] doc %s (file_id=%s) failed: %s",
-                    i, doc.file_id, e, exc_info=True,
-                )
+            else:
                 results.append(AgentResult(
                     success=False,
-                    data={"document_type": doc.actual_type, "extraction_confidence": 0.0, "fields_low_confidence": ["all"], "error_message": str(e)},
-                    error=str(e),
+                    data={"document_type": doc.actual_type, "extraction_confidence": 0.0, "fields_low_confidence": ["all"], "error_message": str(err)},
+                    error=str(err),
                     agent_name=self.NAME,
                     processing_time_ms=elapsed,
                 ))

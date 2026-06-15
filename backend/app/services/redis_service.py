@@ -112,6 +112,21 @@ async def is_embedding_model_loaded() -> bool:
     return val == "1"
 
 
+async def publish_claim_complete(claim_id: str) -> None:
+    """Publish a completion event so SSE subscribers can react immediately."""
+    client = get_redis_client()
+    await client.publish(f"claim_complete:{claim_id}", "done")
+
+
+async def get_queue_depth(queue_name: str = "pipeline") -> int:
+    """Return the number of tasks waiting in the Celery queue (backpressure check)."""
+    client = get_redis_client()
+    try:
+        return await client.llen(queue_name)
+    except Exception:
+        return 0
+
+
 async def ping() -> bool:
     try:
         client = get_redis_client()

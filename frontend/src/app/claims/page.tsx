@@ -1,4 +1,5 @@
 "use client"
+import { useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import { fetchClaims } from "@/lib/api"
@@ -31,6 +32,9 @@ function StatusBadge({ status, decision }: { status: string; decision?: string |
 }
 
 export default function ClaimsListPage() {
+  // Track how long we've been waiting for in-flight claims so we can back off.
+  const waitingSince = useRef<number | null>(null)
+
   const { data: claims, isLoading, error } = useQuery({
     queryKey: ["claims"],
     queryFn: fetchClaims,
@@ -38,7 +42,14 @@ export default function ClaimsListPage() {
       const data = query.state.data as any[] | undefined
       if (!data) return false
       const hasInFlight = data.some((c: any) => c.status === "PENDING" || c.status === "PROCESSING")
-      return hasInFlight ? 3000 : false
+      if (!hasInFlight) {
+        waitingSince.current = null
+        return false
+      }
+      // Adaptive backoff: fast for the first 30 s, slower after that.
+      if (waitingSince.current === null) waitingSince.current = Date.now()
+      const elapsed = Date.now() - waitingSince.current
+      return elapsed < 30_000 ? 3000 : 8000
     },
   })
 

@@ -1,9 +1,9 @@
 "use client"
+import { useEffect, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams, useRouter } from "next/navigation"
-import { fetchClaim, rerunClaim } from "@/lib/api"
+import { fetchClaim, rerunClaim, openClaimEventSource } from "@/lib/api"
 import { CheckCircle, XCircle, AlertTriangle, Clock, ChevronDown, ChevronUp, ArrowLeft, RefreshCw, FileText, Download } from "lucide-react"
-import { useState } from "react"
 
 function DecisionBanner({ claim }: { claim: any }) {
   const config: Record<string, { bg: string; border: string; text: string; icon: any; label: string }> = {
@@ -258,15 +258,29 @@ export default function ClaimDetailPage() {
     }
   }
 
+  // Seed the React-Query cache with an initial HTTP fetch, then keep it live
+  // via SSE — the backend pushes the final result the moment the pipeline finishes.
   const { data: claim, isLoading, error } = useQuery({
     queryKey: ["claim", claimId],
     queryFn: () => fetchClaim(claimId),
-    refetchInterval: (query) => {
-      const data = query.state.data
-      if (!data || data.status === "PENDING" || data.status === "PROCESSING") return 2000
-      return false
-    },
+    // No refetchInterval — SSE replaces polling for the detail view.
   })
+
+  useEffect(() => {
+    if (!claimId) return
+    // If already completed on first render, no SSE needed.
+    if (claim && claim.decision !== null && claim.decision !== undefined) return
+
+    const es = openClaimEventSource(
+      claimId,
+      (data) => {
+        // Update the query cache directly so all components re-render.
+        queryClient.setQueryData(["claim", claimId], data)
+      },
+    )
+    return () => es.close()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claimId])
 
   if (isLoading) {
     return (
