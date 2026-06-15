@@ -176,6 +176,31 @@ _merge_page_results()
 
 ---
 
+## Container Startup Flow
+
+The backend and celery_worker share the same Docker image but have different startup behaviour controlled by the `RUN_MIGRATIONS` env var.
+
+```
+backend container                       celery_worker container
+─────────────────────────────────────   ─────────────────────────────────────
+entrypoint.sh (RUN_MIGRATIONS=true)     entrypoint.sh (RUN_MIGRATIONS=false)
+  │                                       │
+  ├── alembic upgrade head                ├── [skipped]
+  │     checks alembic_version table      │
+  │     only runs unapplied revisions     │
+  │     idempotent on every restart       │
+  │                                       │
+  ├── python -m app.db.seed              ├── [skipped]
+  │     INSERT ... ON CONFLICT UPDATE     │
+  │     safe to run every startup         │
+  │                                       │
+  └── exec uvicorn app.main:app          └── exec celery worker ...
+```
+
+Only the backend runs migrations. The celery_worker sets `RUN_MIGRATIONS=false` so it starts immediately without racing to create the `alembic_version` table. By the time the worker picks up its first task, migrations are already applied.
+
+---
+
 ## Docker Services
 
 | Service | Image / Source | Port | Purpose |
@@ -359,6 +384,7 @@ result_expires          = 3600   # Celery result backend TTL
 | `POST` | `/api/claims` | Submit claim. Idempotency check → doc verification → DB persist → Redis SET → Celery enqueue. Returns 202 or 422. |
 | `GET` | `/api/claims/{claim_id}` | Redis first: key present = in-flight (no DB). Key absent = done, read from DB. |
 | `GET` | `/api/claims` | List 20 most recent claims (DB, paginated via `limit`/`offset`). |
+| `POST` | `/api/upload` | Upload PDF/image (≤ 20 MB). Saves to `/app/uploads/` (shared volume between backend + celery_worker). Returns `file_path` used in claim submission. |
 | `GET` | `/api/members` | All policy members for frontend dropdown. |
 | `GET` | `/api/health` | Checks DB connectivity, Redis ping, and embedding model loaded flag. |
 
@@ -368,8 +394,9 @@ result_expires          = 3600   # Celery result backend TTL
 
 Next.js 14 app at port 3000.
 
-- **`/` (ClaimForm)** — member dropdown, category, treatment date, claimed amount, hospital name, dynamic document list with type + quality + content fields, `simulate_failure` checkbox. On 422 shows specific per-issue error messages. On 202 navigates to `/claims/{id}`.
-- **`/claims/[id]`** — polls `GET /api/claims/{id}` every 2s until status leaves PENDING/PROCESSING. Renders decision banner (green/yellow/red/orange), confidence score, financial breakdown, per-agent trace accordion.
+- **`/` (ClaimForm)** — member dropdown, category, treatment date, claimed amount, hospital name. Each document card has a **file upload button** (PDF/PNG/JPG/WEBP ≤ 20 MB) that calls `POST /api/upload` immediately on select and stores the returned `file_path`. JSON content textarea is available as an alternative (used by automated tests). `simulate_failure` checkbox for TC011. On 422 shows specific per-issue error messages; on 202 navigates to `/claims/{id}`.
+- **`/claims`** — paginated table of all submitted claims with status badge, amounts, and links to detail. Auto-refreshes every 3s if any claim is in PENDING/PROCESSING state.
+- **`/claims/[id]`** — polls `GET /api/claims/{id}` every 2s until status leaves PENDING/PROCESSING. Renders decision banner (green/yellow/red/orange), confidence score, financial breakdown, policy compliance trace steps, fraud signals, and per-agent trace accordion.
 
 ---
 

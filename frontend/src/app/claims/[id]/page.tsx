@@ -1,8 +1,8 @@
 "use client"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams, useRouter } from "next/navigation"
-import { fetchClaim } from "@/lib/api"
-import { CheckCircle, XCircle, AlertTriangle, Clock, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react"
+import { fetchClaim, rerunClaim } from "@/lib/api"
+import { CheckCircle, XCircle, AlertTriangle, Clock, ChevronDown, ChevronUp, ArrowLeft, RefreshCw, FileText, Download } from "lucide-react"
 import { useState } from "react"
 
 function DecisionBanner({ claim }: { claim: any }) {
@@ -161,6 +161,63 @@ function FinancialBreakdown({ bd }: { bd: any }) {
   )
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
+
+function DocumentsSection({ documents }: { documents: any[] }) {
+  if (!documents?.length) return null
+
+  const docTypeColors: Record<string, string> = {
+    PRESCRIPTION: "bg-blue-100 text-blue-700",
+    HOSPITAL_BILL: "bg-purple-100 text-purple-700",
+    PHARMACY_BILL: "bg-green-100 text-green-700",
+    LAB_REPORT: "bg-yellow-100 text-yellow-700",
+    DISCHARGE_SUMMARY: "bg-orange-100 text-orange-700",
+    DENTAL_REPORT: "bg-pink-100 text-pink-700",
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <h3 className="font-semibold text-gray-800 mb-4">Submitted Documents</h3>
+      <div className="space-y-2">
+        {documents.map((doc: any) => (
+          <div key={doc.file_id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50">
+            <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-800 truncate">
+                  {doc.file_name || doc.file_id}
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${docTypeColors[doc.actual_type] || "bg-gray-100 text-gray-600"}`}>
+                  {doc.actual_type}
+                </span>
+                {doc.quality && doc.quality !== "GOOD" && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">
+                    {doc.quality}
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-gray-400 font-mono mt-0.5">{doc.file_id}</div>
+            </div>
+            {doc.file_url ? (
+              <a
+                href={`${API_BASE.replace("/api", "")}${doc.file_url}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors flex-shrink-0"
+              >
+                <Download className="w-3 h-3" />
+                View
+              </a>
+            ) : (
+              <span className="text-xs text-gray-400 italic">no file</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PolicyTraceSteps({ steps }: { steps: any[] }) {
   if (!steps?.length) return null
   return (
@@ -183,7 +240,23 @@ function PolicyTraceSteps({ steps }: { steps: any[] }) {
 export default function ClaimDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const claimId = params.id as string
+  const [rerunning, setRerunning] = useState(false)
+  const [rerunError, setRerunError] = useState<string | null>(null)
+
+  async function handleRerun() {
+    setRerunning(true)
+    setRerunError(null)
+    try {
+      await rerunClaim(claimId)
+      await queryClient.invalidateQueries({ queryKey: ["claim", claimId] })
+    } catch (e: any) {
+      setRerunError(e?.response?.data?.detail || "Rerun failed.")
+    } finally {
+      setRerunning(false)
+    }
+  }
 
   const { data: claim, isLoading, error } = useQuery({
     queryKey: ["claim", claimId],
@@ -217,11 +290,32 @@ export default function ClaimDetailPage() {
   const lineItems = trace.policy_compliance?.line_item_decisions || claim.trace?.policy_compliance?.line_item_decisions || []
   const financialBreakdown = trace.policy_compliance?.financial_breakdown || null
 
+  const isInFlight = claim?.status === "PENDING" || claim?.status === "PROCESSING"
+
   return (
     <div className="max-w-4xl mx-auto">
-      <button onClick={() => router.push("/")} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-6">
-        <ArrowLeft className="w-4 h-4" /> Back to Submit
-      </button>
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={() => router.push("/claims")} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
+          <ArrowLeft className="w-4 h-4" /> All Claims
+        </button>
+
+        {claim && !isInFlight && (
+          <button
+            onClick={handleRerun}
+            disabled={rerunning}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${rerunning ? "animate-spin" : ""}`} />
+            {rerunning ? "Queuing…" : "Rerun Pipeline"}
+          </button>
+        )}
+      </div>
+
+      {rerunError && (
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          {rerunError}
+        </div>
+      )}
 
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Claim Review</h1>
@@ -236,6 +330,8 @@ export default function ClaimDetailPage() {
           Processing claim... checking every 2 seconds
         </div>
       )}
+
+      <DocumentsSection documents={claim.documents || []} />
 
       {lineItems?.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">

@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,6 +22,21 @@ settings = get_settings()
 
 
 def _claim_to_response(claim: Claim) -> dict:
+    # Build document list with public file URLs from raw_submission
+    documents = []
+    for doc in (claim.raw_submission or {}).get("documents", []):
+        file_url = None
+        if doc.get("file_path"):
+            filename = Path(doc["file_path"]).name
+            file_url = f"/api/files/{filename}"
+        documents.append({
+            "file_id": doc.get("file_id"),
+            "file_name": doc.get("file_name"),
+            "actual_type": doc.get("actual_type"),
+            "quality": doc.get("quality"),
+            "file_url": file_url,
+        })
+
     return {
         "claim_id": str(claim.id),
         "member_id": claim.member_id,
@@ -36,6 +52,7 @@ def _claim_to_response(claim: Claim) -> dict:
         "rejection_reasons": claim.rejection_reasons,
         "trace": claim.trace,
         "pipeline_errors": claim.pipeline_errors,
+        "documents": documents,
         "created_at": claim.created_at.isoformat() if claim.created_at else None,
     }
 
@@ -92,6 +109,8 @@ async def submit_claim(
             "message": "An identical claim is already being processed. Use the claim_id to track its status.",
         }
 
+    claim_data = request.model_dump(mode="json")
+
     # Persist claim as PENDING
     claim = Claim(
         id=uuid.uuid4(),
@@ -103,6 +122,7 @@ async def submit_claim(
         hospital_name=request.hospital_name,
         status="PENDING",
         simulate_component_failure=request.simulate_component_failure,
+        raw_submission=claim_data,
     )
     db.add(claim)
     await db.commit()
@@ -114,7 +134,6 @@ async def submit_claim(
     await redis_service.set_claim_status(claim_id, "PENDING")
 
     # Enqueue Celery pipeline
-    claim_data = request.model_dump(mode="json")
     process_claim(claim_id, claim_data)
 
     return {"claim_id": claim_id, "status": "PENDING"}
@@ -159,3 +178,47 @@ async def list_claims(
     )
     claims = result.scalars().all()
     return [_claim_to_response(c) for c in claims]
+
+
+@router.post("/claims/{claim_id}/rerun", status_code=202)
+async def rerun_claim(
+    claim_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        claim_uuid = uuid.UUID(claim_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid claim ID format.")
+
+    claim = await db.get(Claim, claim_uuid)
+    if not claim:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found.")
+
+    if claim.status in ("PENDING", "PROCESSING"):
+        raise HTTPException(status_code=409, detail="Pipeline is already running for this claim.")
+
+    if not claim.raw_submission:
+        raise HTTPException(status_code=400, detail="No original submission data stored — cannot rerun.")
+
+    # Reset claim state
+    claim.status = "PENDING"
+    claim.decision = None
+    claim.approved_amount = None
+    claim.confidence_score = None
+    claim.rejection_reasons = None
+    claim.trace = None
+    claim.pipeline_errors = None
+    await db.commit()
+
+    # Clear any stale NX lock from a previous run, then set in-flight status
+    await redis_service.delete_claim_status(claim_id)
+    _redis_key = f"pipeline_lock:{claim_id}"
+    import redis as sync_redis, os
+    _r = sync_redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"), decode_responses=True)
+    _r.delete(_redis_key)
+
+    await redis_service.set_claim_status(claim_id, "PENDING")
+
+    process_claim(claim_id, claim.raw_submission)
+
+    return {"claim_id": claim_id, "status": "PENDING", "rerun": True}

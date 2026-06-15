@@ -37,6 +37,7 @@ services:
       - POLICY_FILE_PATH=/app/policy_terms.json
     volumes:
       - ./policy_terms.json:/app/policy_terms.json:ro
+      - uploads:/app/uploads
     ports:
       - "8000:8000"
     depends_on:
@@ -54,8 +55,10 @@ services:
     env_file: .env
     environment:
       - POLICY_FILE_PATH=/app/policy_terms.json
+      - RUN_MIGRATIONS=false
     volumes:
       - ./policy_terms.json:/app/policy_terms.json:ro
+      - uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,6 +80,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8000/api
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api
     ports:
@@ -87,3 +92,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

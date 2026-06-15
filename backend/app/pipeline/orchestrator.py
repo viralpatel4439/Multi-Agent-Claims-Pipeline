@@ -17,7 +17,7 @@ from app.pipeline.celery_app import celery_app
 
 def process_claim(claim_id: str, claim_data: dict) -> None:
     """Enqueue the full pipeline for a submitted claim."""
-    run_full_pipeline.apply_async(args=[claim_id, claim_data], queue="default")
+    run_full_pipeline.apply_async(args=[claim_id, claim_data])
 
 
 @celery_app.task(bind=True, name="tasks.run_full_pipeline", max_retries=0)
@@ -34,7 +34,7 @@ def run_full_pipeline(self, claim_id: str, claim_data: dict):
         decode_responses=True,
     )
     lock_key = f"pipeline_lock:{claim_id}"
-    acquired = _redis.set(lock_key, "1", nx=True, ex=600)
+    acquired = _redis.set(lock_key, "1", nx=True, ex=660)
     if not acquired:
         return {"skipped": True, "reason": f"Pipeline already running for claim {claim_id}"}
 
@@ -79,23 +79,43 @@ def _run_pipeline(claim_id: str, claim_data: dict):
     failed_agents = []
     simulate_failure = claim_data.get("simulate_component_failure", False)
 
-    # Step 1: Document extraction
+    # Step 1: Document extraction — all docs in ONE Ollama call
     extractor = DocumentExtractionAgent()
     extraction_results = []
     extracted_docs: list[ExtractedDocument] = []
 
-    for i, doc_data in enumerate(claim_data.get("documents", [])):
-        doc_input = DocumentInput(**doc_data)
-        should_fail = simulate_failure and i == 0
-        result = run_async(extractor.run(doc_input, simulate_failure=should_fail))
-        extraction_results.append(result)
-        if result.success and result.data:
-            try:
-                extracted_docs.append(ExtractedDocument(**result.data))
-            except Exception:
-                pass
-        else:
-            failed_agents.append(f"DocumentExtractionAgent[{doc_data.get('file_id', i)}]")
+    docs_data = claim_data.get("documents", [])
+    if simulate_failure and docs_data:
+        # For TC011: run first doc via single-run with simulate_failure, rest via batch
+        first = DocumentInput(**docs_data[0])
+        first_result = run_async(extractor.run(first, simulate_failure=True))
+        extraction_results.append(first_result)
+        if not first_result.success:
+            failed_agents.append(f"DocumentExtractionAgent[{docs_data[0].get('file_id', 0)}]")
+        rest = [DocumentInput(**d) for d in docs_data[1:]]
+        if rest:
+            rest_results = run_async(extractor.run_batch(rest))
+            for j, result in enumerate(rest_results):
+                extraction_results.append(result)
+                if result.success and result.data:
+                    try:
+                        extracted_docs.append(ExtractedDocument(**result.data))
+                    except Exception:
+                        pass
+                else:
+                    failed_agents.append(f"DocumentExtractionAgent[{docs_data[j+1].get('file_id', j+1)}]")
+    else:
+        doc_inputs = [DocumentInput(**d) for d in docs_data]
+        batch_results = run_async(extractor.run_batch(doc_inputs))
+        for i, result in enumerate(batch_results):
+            extraction_results.append(result)
+            if result.success and result.data:
+                try:
+                    extracted_docs.append(ExtractedDocument(**result.data))
+                except Exception:
+                    pass
+            else:
+                failed_agents.append(f"DocumentExtractionAgent[{docs_data[i].get('file_id', i)}]")
 
     # Step 2: Member info from DB
     async def get_member(member_id: str):

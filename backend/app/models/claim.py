@@ -28,6 +28,7 @@ class Claim(Base):
     trace: Mapped[Optional[dict]] = mapped_column(JSONB)
     pipeline_errors: Mapped[Optional[dict]] = mapped_column(JSONB)
     simulate_component_failure: Mapped[bool] = mapped_column(Boolean, default=False)
+    raw_submission: Mapped[Optional[dict]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("NOW()")
     )

@@ -7,7 +7,7 @@ celery_app = Celery(
     "claims_pipeline",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.pipeline.tasks"],
+    include=["app.pipeline.orchestrator"],
 )
 
 celery_app.conf.update(
@@ -17,7 +17,11 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
-    task_soft_time_limit=120,
-    task_time_limit=180,
+    task_soft_time_limit=600,
+    task_time_limit=660,
     result_expires=3600,
+    worker_hijack_root_logger=False,
 )
+
+import logging
+logging.basicConfig(level=logging.INFO)

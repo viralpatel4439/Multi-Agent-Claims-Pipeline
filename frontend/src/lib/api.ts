@@ -7,6 +7,13 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+export async function uploadDocument(file: File): Promise<{ file_path: string; file_name: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await axios.post(`${API_BASE}/upload`, formData)
+  return res.data
+}
+
 export async function fetchMembers() {
   const res = await api.get('/members')
   return res.data
@@ -24,5 +31,10 @@ export async function fetchClaim(claimId: string) {
 
 export async function fetchClaims() {
   const res = await api.get('/claims')
+  return res.data
+}
+
+export async function rerunClaim(claimId: string) {
+  const res = await api.post(`/claims/${claimId}/rerun`)
   return res.data
 }

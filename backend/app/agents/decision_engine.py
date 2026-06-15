@@ -111,8 +111,11 @@ class DecisionEngine:
                 + ", ".join(failed_agents)
                 + ". Decision was made with incomplete information."
             )
+            # Any extraction failure means we processed the claim with missing document data.
+            # Force MANUAL_REVIEW so a human can verify before money moves.
             if decision not in ("REJECTED", "MANUAL_REVIEW"):
-                pass  # Keep decision but note degraded confidence
+                decision = "MANUAL_REVIEW"
+                decision_reason = manual_review_note
 
         # Build extraction trace
         extraction_trace = []

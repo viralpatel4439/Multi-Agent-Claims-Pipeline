@@ -10,6 +10,9 @@ export const metadata: Metadata = {
   description: "Health Insurance Claims Processing System",
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
+const BACKEND_BASE = API_BASE.replace(/\/api$/, "")
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -24,10 +27,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </div>
                   <span className="font-semibold text-gray-900">Plum Claims</span>
                 </div>
-                <div className="flex gap-4">
-                  <a href="/" className="text-sm text-gray-600 hover:text-gray-900">Submit Claim</a>
-                  <a href="/api/health" target="_blank" className="text-sm text-gray-600 hover:text-gray-900">Health</a>
-                  <a href="/api/docs" target="_blank" className="text-sm text-gray-600 hover:text-gray-900">API Docs</a>
+                <div className="flex gap-6 items-center">
+                  <a href="/" className="text-sm text-gray-600 hover:text-gray-900 font-medium">Submit Claim</a>
+                  <a href="/claims" className="text-sm text-gray-600 hover:text-gray-900 font-medium">Claims</a>
+                  <a href={`${BACKEND_BASE}/api/health`} target="_blank" rel="noreferrer" className="text-sm text-gray-400 hover:text-gray-700">Health ↗</a>
+                  <a href={`${BACKEND_BASE}/docs`} target="_blank" rel="noreferrer" className="text-sm text-gray-400 hover:text-gray-700">API Docs ↗</a>
                 </div>
               </div>
             </nav>
