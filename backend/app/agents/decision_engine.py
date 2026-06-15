@@ -111,11 +111,10 @@ class DecisionEngine:
                 + ", ".join(failed_agents)
                 + ". Decision was made with incomplete information."
             )
-            # Any extraction failure means we processed the claim with missing document data.
-            # Force MANUAL_REVIEW so a human can verify before money moves.
-            if decision not in ("REJECTED", "MANUAL_REVIEW"):
-                decision = "MANUAL_REVIEW"
-                decision_reason = manual_review_note
+            # Confidence is already reduced above (-0.2 per failed agent).
+            # Do NOT override the compliance decision to MANUAL_REVIEW — the assignment
+            # requires the pipeline to produce the real decision (e.g. APPROVED) while
+            # making the component failure visible via failed_components + manual_review_note.
 
         # Build extraction trace
         extraction_trace = []

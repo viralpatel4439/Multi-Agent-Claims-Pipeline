@@ -18,7 +18,11 @@ from app.agents.decision_engine import DecisionEngine
 from app.schemas.claim import ClaimSubmissionRequest
 from app.schemas.document import DocumentInput, ExtractedDocument
 
-TEST_CASES_FILE = Path(__file__).parent.parent.parent.parent / "test_cases.json"
+# Resolve test_cases.json path: Docker mounts it at /app/test_cases.json;
+# locally it lives four directories up from this file (at the repo root).
+_DOCKER_PATH = Path("/app/test_cases.json")
+_LOCAL_PATH = Path(__file__).parent.parent.parent.parent / "test_cases.json"
+TEST_CASES_FILE = _DOCKER_PATH if _DOCKER_PATH.exists() else _LOCAL_PATH
 
 MEMBER_JOIN_DATES = {
     "EMP001": date(2024, 4, 1),

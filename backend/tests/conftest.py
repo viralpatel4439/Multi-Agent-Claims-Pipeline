@@ -9,8 +9,13 @@ import pytest
 # Ensure backend is on the path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-POLICY_FILE = Path(__file__).parent.parent.parent / "policy_terms.json"
-TEST_CASES_FILE = Path(__file__).parent.parent.parent / "test_cases.json"
+# Docker mounts both files under /app; locally they live at the repo root
+# (3 levels up from backend/tests/conftest.py = multi_agent_claims_pipeline/).
+_DOCKER_ROOT = Path("/app")
+_LOCAL_ROOT = Path(__file__).parent.parent.parent
+_ROOT = _DOCKER_ROOT if _DOCKER_ROOT.exists() else _LOCAL_ROOT
+POLICY_FILE = _ROOT / "policy_terms.json"
+TEST_CASES_FILE = _ROOT / "test_cases.json"
 
 
 @pytest.fixture(scope="session")
