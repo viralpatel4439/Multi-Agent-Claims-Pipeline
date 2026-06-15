@@ -8,6 +8,7 @@ class DocumentInput(BaseModel):
     actual_type: str
     quality: Optional[str] = "GOOD"
     content: Optional[dict] = None
+    file_path: Optional[str] = None  # absolute path to uploaded PDF or image
     patient_name_on_doc: Optional[str] = None
 
 
