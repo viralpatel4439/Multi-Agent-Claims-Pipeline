@@ -149,7 +149,7 @@ The 3 warnings are Pydantic v2 deprecation notices for class-based `Config` — 
 ### Run a specific test file
 
 ```bash
-python -m pytest tests/test_cases/test_all_12_cases.py -v      # All 12 assignment test cases
+python -m pytest tests/test_cases/test_all_12_cases.py -v      # All 12 test cases
 python -m pytest tests/test_agents/test_policy_checker.py -v   # Policy logic only
 python -m pytest tests/test_agents/test_fraud_detector.py -v   # Fraud detection only
 ```

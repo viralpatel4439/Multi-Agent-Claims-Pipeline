@@ -213,7 +213,7 @@ all-MiniLM-L6-v2 → 384-dim vectors (one model.encode() call for all docs)
 
 **Why `diagnosis or treatment` fallback:** A hospital bill has no diagnosis field. Using treatment text as the embedding source ensures every document produces a vector, enabling similarity search across all document types.
 
-**Why Qwen2.5-VL over OCR + rules:** The assignment describes handwritten prescriptions, rubber stamps, and phone photos. Rule-based OCR mapping breaks on all three. A vision model reads the image as a human would.
+**Why Qwen2.5-VL over OCR + rules:** Real-world medical documents include handwritten prescriptions, rubber stamps, and phone photos. Rule-based OCR mapping breaks on all three. A vision model reads the image as a human would.
 
 **Local model setup:** https://github.com/viralpatel4439/Local-Model-Setup
 

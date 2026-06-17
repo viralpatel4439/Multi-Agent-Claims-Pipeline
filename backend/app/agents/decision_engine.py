@@ -112,9 +112,9 @@ class DecisionEngine:
                 + ". Decision was made with incomplete information."
             )
             # Confidence is already reduced above (-0.2 per failed agent).
-            # Do NOT override the compliance decision to MANUAL_REVIEW — the assignment
-            # requires the pipeline to produce the real decision (e.g. APPROVED) while
-            # making the component failure visible via failed_components + manual_review_note.
+            # Do NOT override the compliance decision to MANUAL_REVIEW — the pipeline
+            # produces the real decision (e.g. APPROVED) while making the component
+            # failure visible via failed_components + manual_review_note.
 
         # Build extraction trace
         extraction_trace = []

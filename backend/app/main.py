@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Plum Claims Processing API",
+    title="Health Insurance Claims Processing API",
     description="Multi-agent health insurance claims pipeline",
     version="1.0.0",
     lifespan=lifespan,
@@ -56,4 +56,4 @@ app.include_router(tests_runner.router, prefix="/api", tags=["Tests"])
 
 @app.get("/")
 async def root():
-    return {"message": "Plum Claims API", "docs": "/docs"}
+    return {"message": "Health Insurance Claims API", "docs": "/docs"}

@@ -361,7 +361,7 @@ HTTP `POST /api/claims` with JSON body `ClaimSubmissionRequest`:
 ```json
 {
   "member_id": "EMP001",
-  "policy_id": "PLUM_GHI_2024",
+  "policy_id": "GHI_2024",
   "claim_category": "CONSULTATION",
   "treatment_date": "2024-11-01",
   "claimed_amount": 1500.0,

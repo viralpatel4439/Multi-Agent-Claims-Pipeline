@@ -206,7 +206,7 @@ Test command (inside Docker): `docker-compose exec backend python3 -m pytest tes
   "decision": "REJECTED",
   "approved_amount": 0,
   "rejection_reasons": ["PRE_AUTH_MISSING"],
-  "decision_reason": "Pre-authorization is required for MRI/CT/PET procedures above ₹10,000. This claim for ₹15,000 was not pre-authorized. Please obtain pre-authorization from Plum before undergoing high-value diagnostic procedures and resubmit."
+  "decision_reason": "Pre-authorization is required for MRI/CT/PET procedures above ₹10,000. This claim for ₹15,000 was not pre-authorized. Please obtain pre-authorization before undergoing high-value diagnostic procedures and resubmit."
 }
 ```
 
@@ -331,7 +331,7 @@ Test command (inside Docker): `docker-compose exec backend python3 -m pytest tes
 
 **Match:** ✅ — No crash; decision is `APPROVED` (not overridden to MANUAL_REVIEW); confidence reduced from 0.9 to 0.7; `failed_components` and `manual_review_note` visible.
 
-**Note on design decision:** The assignment says the pipeline must "continue and produce a decision." The code does not override the compliance decision to `MANUAL_REVIEW` when a component fails — it preserves `APPROVED` while surfacing the failure via `failed_components` and reducing confidence. This satisfies the assignment requirement for graceful degradation without hiding the failure.
+**Note on design decision:** The pipeline continues and produces a decision even when a component fails. The code does not override the compliance decision to `MANUAL_REVIEW` — it preserves `APPROVED` while surfacing the failure via `failed_components` and reducing confidence. This achieves graceful degradation without hiding the failure.
 
 ---
 

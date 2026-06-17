@@ -9,7 +9,7 @@ from app.schemas.document import DocumentInput, ExtractedDocument
 def make_claim(**kwargs) -> ClaimSubmissionRequest:
     defaults = {
         "member_id": "EMP001",
-        "policy_id": "PLUM_GHI_2024",
+        "policy_id": "GHI_2024",
         "claim_category": "CONSULTATION",
         "treatment_date": date(2024, 11, 1),
         "claimed_amount": 1500.0,
